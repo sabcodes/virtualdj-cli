@@ -1,0 +1,9 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+*credentials*
+*token*.json
+node_modules/
+dist/
+build/
