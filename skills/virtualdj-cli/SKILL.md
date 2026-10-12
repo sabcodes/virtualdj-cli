@@ -44,3 +44,5 @@ Output is JSON. Exit 0 means the command's stated result succeeded; 1 means an o
 
 
 Direct SDK text queries for version failed on the tested app; doctor uses VDJScript text formatting. A rejected license query is reported separately as unknown; do not infer license entitlements from it. Empty decks report null metadata; missing analyzed/tag fields may also be null. Positive SendCommand results can be nonfatal, so submission is always separate from state verification.
+
+For paired stems from the same recording, preserve the shared starting position and prefer `--no-sync`; isolated stem BPM/key estimates may disagree. Check matching elapsed positions. This was tested with Orion Sun — Mirage drums/vocals, with active master meter signal and a completed eight-beat no-sync crossfade. For slow-opening files, `vdj --timeout 5 load ...` allows a longer verification deadline; the CLI polls metadata readiness without resubmitting load.

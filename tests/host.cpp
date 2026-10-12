@@ -6,6 +6,8 @@ class Host : public IVdjCallbacks8 {
     std::string paths_[2];
     bool playing_[2] = {false, false};
     bool automix_ = false;
+    int pathWait_[2] = {0, 0};
+    int loadCount_ = 0;
 public:
     HRESULT SendCommand(const char* raw) override {
         std::string script(raw);
@@ -22,6 +24,8 @@ public:
             auto start = script.find(prefix + "load \"");
             if (start != std::string::npos) {
                 start += prefix.size() + 6;
+                ++loadCount_;
+                pathWait_[i] = script.find("delayed.wav") != std::string::npos ? 2 : 0;
                 paths_[i] = script.substr(start, script.rfind('"') - start);
             }
         }
@@ -31,7 +35,8 @@ public:
         std::string script(raw);
         if (script == "reject") return S_FALSE;
         if (script == "nonfinite") { *value = NAN; return S_OK; }
-        if (script == "get_build") *value = 9583;
+        if (script == "load_count") *value = loadCount_;
+        else if (script == "get_build") *value = 9583;
         else if (script == "automix") *value = automix_;
         else if (script == "file_count automix") *value = 2;
         else if (script == "crossfader") *value = .5;
@@ -46,6 +51,12 @@ public:
     }
     HRESULT GetStringInfo(const char* raw, void* output, int size) override {
         std::string script(raw), value;
+        for (int i = 0; i < 2; ++i) {
+            if (script == "deck " + std::to_string(i + 1) + " get_filepath" && pathWait_[i] > 0) {
+                --pathWait_[i];
+                return S_FALSE; // A loaded flag can precede the metadata callback being ready.
+            }
+        }
         if (script == "get_text `get_version`") value = "TEST HOST";
         else if (script == "get_license") return S_FALSE;
         else if (script == "deck 1 get_filepath") value = paths_[0];

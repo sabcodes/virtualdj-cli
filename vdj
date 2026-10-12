@@ -210,7 +210,15 @@ def run(args, bridge):
             # Repeat the guard inside VirtualDJ to cover the gap since the query.
             script = prefix + f'play ? nothing : {script}'
         bridge.execute(script)
-        verify(bridge, lambda: bool(bridge.number(prefix + 'loaded')) and bridge.text(prefix + 'get_filepath') == str(path), 'loaded path did not match')
+        def is_loaded():
+            try:
+                return bool(bridge.number(prefix + 'loaded')) and bridge.text(prefix + 'get_filepath') == str(path)
+            except VDJError as exc:
+                # Decoder metadata can lag behind the loaded flag. Poll queries only.
+                if exc.details.get('error') == 'sdk_rejected' and exc.details.get('hresult') == 1:
+                    return False
+                raise
+        verify(bridge, is_loaded, 'loaded path did not match')
         return {'verified': True, 'deck': args.deck, 'path': str(path)}
     if command in ('play', 'pause'):
         bridge.execute(f'deck {args.deck} {command}')

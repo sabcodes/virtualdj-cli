@@ -50,6 +50,15 @@ class Integration(unittest.TestCase):
         self.assertEqual(response['ok'], code == 0)
         return response
 
+    def test_delayed_filepath_is_verified_without_resubmitting(self):
+        delayed = self.song.parent / 'delayed.wav'
+        delayed.write_bytes(b'fixture')
+        before = self.cli('query', 'load_count')['value']
+        response = self.cli('load', '--deck', '2', str(delayed))
+        self.assertTrue(response['verified'])
+        self.assertEqual(response['path'], str(delayed.resolve()))
+        self.assertEqual(self.cli('query', 'load_count')['value'] - before, 1)
+
     def test_doctor_and_utf8_state(self):
         doctor = self.cli('doctor')
         self.assertEqual(doctor['version'], 'TEST HOST')
