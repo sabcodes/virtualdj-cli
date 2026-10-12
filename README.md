@@ -2,7 +2,7 @@
 
 A macOS CLI for agents to operate the running VirtualDJ app through its plugin SDK, VDJScript and Automix. No desktop input automation. This tool works with local music files.
 
-**Local-file milestone verified:** on the user’s VirtualDJ 2026 build 9644 (user reports Free), the CLI reads deck state, loads local files, controls playback, verifies BPM sync and completes no-sync crossfades. Live tests include Orion Sun — Mirage drums/vocals from the user's Stem Splitter output; app state and signal meter are verified, while subjective musical quality is unverified. Automix status/stop are live-tested; start/next retain harness coverage only.  The SDK license query is unavailable on the tested build and is reported as unknown.
+**Local-file milestone verified:** on the Mac M2 PRO VirtualDJ 2026, the CLI reads deck state, loads local files, controls playback, verifies BPM sync and completes no-sync crossfades. Live tests include Orion Sun — Mirage drums/vocals from the user's Stem Splitter output; app state and signal meter are verified, while subjective musical quality is unverified. Automix status/stop are live-tested; start/next retain harness coverage only.  The SDK license query is unavailable on the tested build and is reported as unknown.
 
 ## Setup
 
