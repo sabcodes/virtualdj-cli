@@ -132,6 +132,9 @@ def parser():
         if name == 'load':
             command.add_argument('path')
             command.add_argument('--replace-playing', action='store_true')
+    sync = commands.add_parser('sync', help='match playback BPM to an explicit source deck')
+    sync.add_argument('--deck', type=int, choices=(1, 2), required=True, help='deck whose tempo changes')
+    sync.add_argument('--to', type=int, choices=(1, 2), required=True, help='source deck to follow')
     transition = commands.add_parser('transition')
     transition.add_argument('--beats', type=positive, default=8.0)
     transition.add_argument('--no-sync', action='store_true')
@@ -226,6 +229,32 @@ def run(args, bridge):
         verify(bridge, lambda: bool(bridge.number(f'deck {args.deck} play')) == expected,
                'transport state did not match')
         return {'verified': True, 'deck': args.deck, 'playing': expected}
+    if command == 'sync':
+        if args.deck == args.to:
+            raise VDJError('distinct_decks_required: target and source must differ')
+        if bridge.number('automix'):
+            raise VDJError('automix_active: stop Automix before syncing BPM')
+        if not all(bridge.number(f'deck {deck} loaded') for deck in (args.deck, args.to)):
+            raise VDJError('both_decks_must_have_tracks')
+        if bridge.number(f'deck {args.deck} pitch_lock'):
+            raise VDJError('pitch_lock_active: turn off Pitch Lock before syncing one deck')
+        source_bpm = bridge.number(f'deck {args.to} get_bpm')
+        before = bridge.number(f'deck {args.deck} get_bpm')
+        if source_bpm <= 0 or before <= 0:
+            raise VDJError('invalid_bpm: both decks need a positive analyzed playback BPM')
+        # Explicit BPM avoids the implicit master/other-deck selection of generic sync.
+        # Send once; all verification retries below are queries.
+        bridge.execute(f'deck {args.deck} pitch {source_bpm:.12g} bpm')
+        observed = {}
+        def bpm_matches():
+            observed['bpm'] = bridge.number(f'deck {args.deck} get_bpm')
+            current_source = bridge.number(f'deck {args.to} get_bpm')
+            return (abs(observed['bpm'] - source_bpm) <= 0.05
+                    and abs(current_source - source_bpm) <= 0.05)
+        verify(bridge, bpm_matches, 'target BPM or source reference did not match')
+        return {'verified': True, 'deck': args.deck, 'source_deck': args.to,
+                'bpm_before': before, 'bpm': observed['bpm'], 'source_bpm': source_bpm,
+                'mode': 'bpm_only'}
     if command == 'transition':
         if bridge.number('automix'):
             raise VDJError('automix_active: stop Automix to use a custom transition duration')

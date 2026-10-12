@@ -40,3 +40,15 @@ Verified exact loads, simultaneous start at zero, both playing flags, matching e
 The real files exposed a readiness race: loaded can become true before get_filepath produces a value. Previously that transient S_FALSE aborted verification even though loading later succeeded. The CLI now waits through that specific nonfatal query result until its existing deadline, without resubmitting the load mutation; negative SDK and transport errors still fail. A native integration test reproduced the failure first, then verified successful loading with exactly one load submission. Nine tests pass. Both real files subsequently returned verified:true through typed load commands with a five-second deadline.
 
 These stems produced differing independently analyzed BPM/key values despite matching playback positions. For paired stems from one recording, preserve their shared timeline and use no-sync instead of stretching one to match the other’s estimator.
+
+## Explicit BPM sync — 2026-10-12
+
+Added `vdj sync --deck TARGET --to SOURCE` to match a captured source playback BPM through the documented `pitch BPM bpm` action. This does not edit the analyzed beatgrid or select an implicit master deck. It requires distinct loaded decks, positive BPM, stopped Automix and target Pitch Lock off, and verifies target/reference agreement within 0.05 BPM without resubmitting the mutation.
+
+Twelve native integration tests pass, including both directions, source and transport preservation, preflight refusal without tempo mutation, and a nonfatal no-op that fails verification after exactly one submission.
+
+Live app: VirtualDJ 2026 build 9644, user-reported Free; same Mirage drums/vocals loaded and stopped. Deck 2 went from 117.31844329833984 BPM to 116.99552154541016 BPM following deck 1 at 116.99681091308594 BPM. Both playing flags and paths stayed unchanged. Source tempo stayed unchanged. Original deck-2 pitch (100%) was restored and its BPM returned to 117.31844329833984.
+
+The first live assertion incorrectly compared ordinary elapsed milliseconds: deck 2 displayed 4205 before and 4217 after, because get_time accounts for pitch. The official verb reference documents `absolute` for ignoring pitch. Follow-up testing confirmed unchanged get_position values [0.0008580654975958169, 0.07313746213912964] and unchanged absolute elapsed milliseconds [49, 4205]. The harness now checks get_position rather than assuming the ordinary time readout is invariant. No subjective audio quality or beat/phrase alignment claim.
+
+Source: https://virtualdj.com/manuals/virtualdj/appendix/vdjscriptverbs.html (pitch, pitch_lock, get_bpm, get_time, get_position).

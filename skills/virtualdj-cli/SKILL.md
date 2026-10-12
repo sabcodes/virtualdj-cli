@@ -1,6 +1,6 @@
 ---
 name: virtualdj-cli
-description: Operate a running VirtualDJ instance through the local macOS CLI bridge for deck state, local-track loading, playback, Automix and transitions. Use when the user wants agents to control VirtualDJ from terminal commands.
+description: Operate a running VirtualDJ instance through the local macOS CLI bridge for deck state, local-track loading, playback, BPM sync, Automix and transitions. Use when the user wants agents to control VirtualDJ from terminal commands.
 ---
 
 # VirtualDJ CLI
@@ -23,6 +23,7 @@ vdj status --deck 1
 vdj load --deck 2 '/absolute/path/to/song.wav'
 vdj play --deck 2
 vdj pause --deck 1
+vdj sync --deck 2 --to 1
 vdj transition --beats 8
 vdj transition --beats 8 --no-sync
 vdj automix start
@@ -37,6 +38,7 @@ Output is JSON. Exit 0 means the command's stated result succeeded; 1 means an o
 
 - Loading alone does not authorize starting playback. Typed load protects playing decks and verifies the loaded path. Use `--replace-playing` only when the user intends to replace that playing track.
 - Playlist selection/queuing is performed inside VirtualDJ in this milestone. Automix start requires a nonempty queue; next requires active Automix. Stop Automix before requesting a custom transition duration.
+- `sync --deck TARGET --to SOURCE` matches playback BPM only, using explicit distinct decks 1/2. Both decks need positive analyzed BPM, Automix stopped and target Pitch Lock off. Success verifies the target within 0.05 BPM of the captured source and checks the source still agrees. It does not request a playhead jump or beat/phrase alignment. Never repeat a failed sync automatically.
 - Transition returns `submitted`, not a completed or musically verified transition. Inspect deck state afterwards. Beat matching is conditional on VirtualDJ's engine and track tempos; it does not guarantee phrase alignment.
 - Status consists of sequential queries, not an atomic snapshot. Use it to choose the appropriate deck and avoid overwriting the live track.
 - SDK rejection, transport timeout or verification timeout is a real failure/unknown outcome. Inspect state before retrying a mutation; never automatically repeat a load, skip or transition.
@@ -45,4 +47,6 @@ Output is JSON. Exit 0 means the command's stated result succeeded; 1 means an o
 
 Direct SDK text queries for version failed on the tested app; doctor uses VDJScript text formatting. A rejected license query is reported separately as unknown; do not infer license entitlements from it. Empty decks report null metadata; missing analyzed/tag fields may also be null. Positive SendCommand results can be nonfatal, so submission is always separate from state verification.
 
-For paired stems from the same recording, preserve the shared starting position and prefer `--no-sync`; isolated stem BPM/key estimates may disagree. Check matching elapsed positions. This was tested with Orion Sun — Mirage drums/vocals, with active master meter signal and a completed eight-beat no-sync crossfade. For slow-opening files, `vdj --timeout 5 load ...` allows a longer verification deadline; the CLI polls metadata readiness without resubmitting load.
+For paired stems from the same recording, preserve the shared starting position and prefer `--no-sync`; isolated stem BPM/key estimates may disagree. Check matching absolute file positions using `get_position` or `get_time "elapsed" "absolute"`; ordinary elapsed time rescales with pitch. This was tested with Orion Sun — Mirage drums/vocals, with active master meter signal and a completed eight-beat no-sync crossfade. For slow-opening files, `vdj --timeout 5 load ...` allows a longer verification deadline; the CLI polls metadata readiness without resubmitting load.
+
+BPM sync was live-verified on build 9644: deck 2 changed from 117.318 to 116.996 BPM following deck 1, while absolute file positions and playing flags stayed unchanged. Original pitch was restored after the stopped-deck test to preserve paired-stem timing.

@@ -114,6 +114,71 @@ class Integration(unittest.TestCase):
         response = self.cli('--timeout', '0.1', 'load', '--deck', '2', str(ignored), code=1)
         self.assertIn('verification_timeout', response['error'])
 
+    def prepare_sync(self):
+        self.cli('automix', 'stop')
+        self.cli('script', 'pitch_lock off')
+        for deck in ('1', '2'):
+            self.cli('pause', '--deck', deck)
+            self.cli('load', '--deck', deck, str(self.song))
+        self.cli('script', 'deck 1 pitch 120 bpm')
+        self.cli('script', 'deck 2 pitch 128 bpm')
+
+    def test_sync_bpm_both_directions_preserves_source_and_transport(self):
+        self.prepare_sync()
+        self.cli('play', '--deck', '1')
+        before = self.cli('status')
+        positions = [self.cli('query', f'deck {deck} get_position')['value'] for deck in (1, 2)]
+        response = self.cli('sync', '--deck', '2', '--to', '1')
+        self.assertTrue(response['verified'])
+        self.assertEqual(response['bpm'], 120)
+        self.assertEqual(response['source_bpm'], 120)
+        self.assertEqual(response['bpm_before'], 128)
+        after = self.cli('status')
+        self.assertEqual([d['bpm'] for d in after['decks']], [120, 120])
+        for old, new in zip(before['decks'], after['decks']):
+            for key in ('path', 'playing'):
+                self.assertEqual(old[key], new[key])
+        self.assertEqual(positions, [self.cli('query', f'deck {deck} get_position')['value']
+                                     for deck in (1, 2)])
+        self.cli('script', 'deck 2 pitch 135.25 bpm')
+        response = self.cli('sync', '--deck', '1', '--to', '2')
+        self.assertEqual(response['bpm'], 135.25)
+        self.assertEqual(response['source_deck'], 2)
+        self.cli('pause', '--deck', '1')
+
+    def test_sync_preconditions_prevent_mutation(self):
+        self.prepare_sync()
+        count = self.cli('query', 'pitch_count')['value']
+        self.assertIn('distinct_decks', self.cli('sync', '--deck', '1', '--to', '1', code=1)['error'])
+        self.cli('sync', '--deck', '3', '--to', '1', code=2)
+        self.cli('sync', '--deck', '2', code=2)
+        self.cli('automix', 'start')
+        self.assertIn('automix_active', self.cli('sync', '--deck', '2', '--to', '1', code=1)['error'])
+        self.cli('automix', 'stop')
+        self.cli('script', 'pitch_lock on')
+        self.assertIn('pitch_lock_active', self.cli('sync', '--deck', '2', '--to', '1', code=1)['error'])
+        self.cli('script', 'pitch_lock off')
+        self.cli('script', 'deck 2 unload')
+        self.assertIn('both_decks_must_have_tracks',
+                      self.cli('sync', '--deck', '2', '--to', '1', code=1)['error'])
+        self.assertEqual(self.cli('query', 'pitch_count')['value'], count)
+        self.cli('load', '--deck', '2', str(self.song))
+        for deck in ('1', '2'):
+            self.cli('script', f'deck {deck} pitch 0 bpm')
+            count = self.cli('query', 'pitch_count')['value']
+            self.assertIn('invalid_bpm', self.cli('sync', '--deck', '2', '--to', '1', code=1)['error'])
+            self.assertEqual(self.cli('query', 'pitch_count')['value'], count)
+            self.cli('script', f'deck {deck} pitch 120 bpm')
+
+    def test_sync_noop_is_not_verified_and_is_not_retried(self):
+        self.prepare_sync()
+        count = self.cli('query', 'pitch_count')['value']
+        self.cli('script', 'ignore_pitch_once')
+        response = self.cli('--timeout', '0.1', 'sync', '--deck', '2', '--to', '1', code=1)
+        self.assertIn('verification_timeout', response['error'])
+        self.assertEqual(self.cli('query', 'deck 2 get_bpm')['value'], 128)
+        self.assertEqual(self.cli('query', 'pitch_count')['value'] - count, 1)
+
     def test_unavailable_bridge(self):
         env = {**self.env, 'VDJ_BRIDGE_PORT': self.name + '.missing'}
         self.assertIn('bridge_unavailable', self.cli('doctor', env=env, code=1)['error'])

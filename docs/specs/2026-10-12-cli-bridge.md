@@ -51,3 +51,13 @@ Loader revision: the AutoStart attempt did not expose the bridge on the user's F
 ## Milestone evidence update
 
 Live selection on the user-reported Free build 9644 verified native communication, state queries, exact local loading, transport and a four-beat no-sync transition with silent audio. Eight regression tests pass. License introspection is unavailable and is reported as unknown. Musical quality, phrase alignment, live Automix start/next are still outside verified coverage; the user’s existing two-track Automix queue was preserved. Install the agent skill with those explicit limits.
+
+## BPM sync addition — 2026-10-12
+
+User request: add an agent tool to sync BPM. Contract: `vdj sync --deck TARGET --to SOURCE`, with explicit, distinct decks 1 or 2. Read the source's current playback BPM once, then submit the documented `deck TARGET pitch BPM bpm` exactly once. This changes playback tempo rather than analyzed BPM metadata; it does not request playback, beat/phrase alignment or a master-deck change.
+
+Require both decks loaded, positive finite BPM on both decks, Automix stopped, and target Pitch Lock off (do not change the user's lock setting). Verify the target matches the captured BPM within 0.05 BPM and the source still matches that value. Return target/source deck, before BPM, observed BPM and reference BPM with `verified: true` only after verification. A changed reference, SDK rejection, no-op or pitch-range clamp can fail verification; never retry the mutation automatically. Settings and track analysis can change between sequential queries.
+
+Acceptance: native harness covers both directions, source/transport preservation, invalid/unloaded decks, invalid BPM, Automix/Pitch Lock rejection and nonfatal no-op acknowledgement with a single submission. Verify against the running app, capture the result, update agent usage instructions and push the milestone. Paired stems of one recording retain a common timeline at their original speed; their independent BPM estimates need not agree.
+
+BPM sync acceptance evidence: twelve harness tests pass; live target BPM matched within 0.002 BPM on build 9644 with source tempo, absolute file positions and transport preserved. Original target pitch restored after testing. Ordinary elapsed time is tempo-scaled and cannot establish an unchanged file position.

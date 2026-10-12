@@ -1,6 +1,7 @@
 // Native integration harness: the real bridge with fake, observable SDK callbacks.
 #include "../plugin/bridge.cpp"
 #include <iostream>
+#include <sstream>
 
 class Host : public IVdjCallbacks8 {
     std::string paths_[2];
@@ -8,15 +9,32 @@ class Host : public IVdjCallbacks8 {
     bool automix_ = false;
     int pathWait_[2] = {0, 0};
     int loadCount_ = 0;
+    double bpm_[2] = {120, 128};
+    bool pitchLock_ = false;
+    bool ignorePitchOnce_ = false;
+    int pitchCount_ = 0;
 public:
     HRESULT SendCommand(const char* raw) override {
         std::string script(raw);
         if (script == "reject") return static_cast<HRESULT>(0x80070057);
         if (script.find("ignored.wav") != std::string::npos) return S_FALSE;
+        if (script == "ignore_pitch_once") ignorePitchOnce_ = true;
+        if (script == "pitch_lock on") pitchLock_ = true;
+        if (script == "pitch_lock off") pitchLock_ = false;
         if (script == "automix on") automix_ = true;
         if (script == "automix off") automix_ = false;
         for (int i = 0; i < 2; ++i) {
             std::string prefix = "deck " + std::to_string(i + 1) + " ";
+            if (script.find(prefix + "pitch ") == 0) {
+                std::istringstream input(script.substr(prefix.size() + 6));
+                double bpm;
+                std::string unit;
+                if (input >> bpm >> unit && unit == "bpm") {
+                    ++pitchCount_;
+                    if (!ignorePitchOnce_) bpm_[i] = bpm;
+                    ignorePitchOnce_ = false;
+                }
+            }
             if (script == prefix + "play") playing_[i] = true;
             if (script == prefix + "pause") playing_[i] = false;
             if (script == prefix + "unload") { playing_[i] = false; paths_[i].clear(); }
@@ -40,7 +58,11 @@ public:
         else if (script == "automix") *value = automix_;
         else if (script == "file_count automix") *value = 2;
         else if (script == "crossfader") *value = .5;
-        else if (script.find("get_bpm") != std::string::npos) *value = 120;
+        else if (script == "pitch_count") *value = pitchCount_;
+        else if (script == "deck 1 pitch_lock" || script == "deck 2 pitch_lock") *value = pitchLock_;
+        else if (script == "deck 1 get_bpm") *value = bpm_[0];
+        else if (script == "deck 2 get_bpm") *value = bpm_[1];
+        else if (script.find("get_position") != std::string::npos) *value = .2;
         else if (script.find("get_time") != std::string::npos) *value = 1000;
         else if (script == "deck 1 loaded") *value = !paths_[0].empty();
         else if (script == "deck 2 loaded") *value = !paths_[1].empty();

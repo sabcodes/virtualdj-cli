@@ -2,7 +2,7 @@
 
 A macOS CLI for agents to operate the running VirtualDJ app through its plugin SDK, VDJScript and Automix. No desktop input automation. This tool works with local music files.
 
-**Local-file milestone verified:** on the user’s VirtualDJ 2026 build 9644 (user reports Free), the CLI reads deck state, loads local files, controls playback and completes a four-beat no-sync crossfade. Live tests used generated silent WAVs, so musical quality is unverified. Automix status/stop are live-tested; start/next retain harness coverage only.  The SDK license query is unavailable on the tested build and is reported as unknown.
+**Local-file milestone verified:** on the user’s VirtualDJ 2026 build 9644 (user reports Free), the CLI reads deck state, loads local files, controls playback, verifies BPM sync and completes no-sync crossfades. Live tests include Orion Sun — Mirage drums/vocals from the user's Stem Splitter output; app state and signal meter are verified, while subjective musical quality is unverified. Automix status/stop are live-tested; start/next retain harness coverage only.  The SDK license query is unavailable on the tested build and is reported as unknown.
 
 ## Setup
 
@@ -21,6 +21,7 @@ Open/reopen VirtualDJ yourself. In the **master effects dropdown**, select **Age
 ./vdj status
 ./vdj load --deck 2 '/absolute/path/to/song.wav'
 ./vdj play --deck 2
+./vdj sync --deck 2 --to 1
 ./vdj transition --beats 8
 ./vdj automix start
 ./vdj automix next
@@ -28,6 +29,8 @@ Open/reopen VirtualDJ yourself. In the **master effects dropdown**, select **Age
 ```
 
 Use `./vdj --help` for the full command list. Output is JSON. Exit codes: 0 success, 1 operational failure, 2 invalid arguments.
+
+Sync changes the target deck's playback BPM to the explicitly chosen source deck and verifies agreement within 0.05 BPM. Both decks must be loaded, Automix stopped and Pitch Lock off. It requests tempo matching without beat/phrase alignment or a playback change. VirtualDJ's elapsed-time readout accounts for tempo; use `get_position` or `get_time "elapsed" "absolute"` to compare file positions across pitch changes.
 
 Load confirms the deck filepath and protects playing decks. Play/pause and Automix enable/disable confirm queried state. Transition, skip and raw script return submission only; they do not claim completion. Do not automatically retry a timed-out mutation. Status is sequential, not atomic. Playlist selection remains in VirtualDJ. Track loading accepts local audio files only.
 
