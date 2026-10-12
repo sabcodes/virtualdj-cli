@@ -1,52 +1,69 @@
 ---
 name: virtualdj-cli
-description: Operate a running VirtualDJ instance through the local macOS CLI bridge for deck state, local-track loading, playback, BPM sync, Automix and transitions. Use when the user wants agents to control VirtualDJ from terminal commands.
+description: Control running VirtualDJ on macOS through its CLI bridge. Use for local-song or stem loading, playback, BPM sync, transitions, Automix and deck-state checks.
 ---
 
 # VirtualDJ CLI
 
-Availability: local-file feasibility milestone verified against the user’s running VirtualDJ 2026 build 9644 (user reports Free): status, protected loading, transport and a four-beat no-sync transition using silent WAVs. Automix status/stop are live-verified; start/next have harness coverage only. Run `doctor` against the real app before mutations. Neither silent-file testing nor a successful callback establishes musical quality.
+Operate VirtualDJ through the installed native bridge and CLI. The user opens the app and selects **Agent CLI Bridge** (shown as **AgentCLIBridge**) from the master effects dropdown once per app session. Agents use terminal commands; the workflow does not use desktop input automation.
 
-## Locate and connect
+Last live verification: VirtualDJ 2026 build 9644, user-reported Free. Local loading, transport, BPM sync and no-sync crossfades worked; the user subsequently confirmed the setup works. Automix start/next have native harness coverage, while status/stop are also live-tested. Track loading is limited to local audio files.
 
-In this repository the executable is `../../vdj` relative to this skill directory. If the skill has been copied elsewhere, locate `vdj` on PATH or use the user-configured `VDJ_CLI_BIN`; do not assume another checkout's path. Use the executable's absolute path for shell calls.
+## Locate the CLI
 
-The user opens VirtualDJ and selects **Agent CLI Bridge** in the master effects dropdown. Agents operate exclusively through the CLI; they do not take desktop focus, send keystrokes, click controls, alter licensing.
+In the repository, resolve `../../vdj` relative to this skill directory. If the skill is copied elsewhere, use the user-configured `VDJ_CLI_BIN` or locate the intended executable on PATH.
 
-Run `vdj doctor`, then `vdj status`. If `bridge_unavailable` occurs, ask the user to open/reopen the app and select the plugin; do not retry the same unavailable connection repeatedly or switch to GUI automation. Sandbox restrictions may independently block native local IPC; report the actual error and use the normal authorized execution-permission flow.
+Set `VDJ_CLI_BIN` to that resolved absolute executable path and quote it in every shell call because the checkout name contains spaces. Use `"$VDJ_CLI_BIN" --help` or a subcommand's `--help` to inspect current arguments. Typed commands currently address decks **1 and 2**, even if the app displays four decks.
 
-## Commands
+## Operate and verify
+
+1. Run `doctor`, then `status`. Continue when the bridge is connected and the intended deck/track is identified. Status is sequential, not an atomic snapshot.
+2. Choose the action from the user's request. For loading, resolve the intended local file and choose a stopped deck; loading alone does not start playback. Use `--replace-playing` only when replacing that playing track is intended.
+3. Run the typed command and inspect its JSON. Exit 0 is success, 1 is an operational failure, and 2 is invalid arguments. Load, transport, sync and Automix on/off report `verified: true` after querying their effects.
+4. For transitions, skips or raw scripts, `submitted: true` means submission only. Query status afterwards and report the observed result; a callback or playing flag alone does not establish audible output or musical quality.
+
+Example: when the user asks to load, match and play a second local song following deck 1, inspect deck 1 as the reference and deck 2 as the target, then:
 
 ```bash
-vdj doctor
-vdj status --deck 1
-vdj load --deck 2 '/absolute/path/to/song.wav'
-vdj play --deck 2
-vdj pause --deck 1
-vdj sync --deck 2 --to 1
-vdj transition --beats 8
-vdj transition --beats 8 --no-sync
-vdj automix start
-vdj automix next
-vdj automix stop
-vdj automix status
-vdj query 'deck 1 get_bpm'
-vdj query 'deck 1 get_filepath' --type text
+"$VDJ_CLI_BIN" doctor
+"$VDJ_CLI_BIN" status
+"$VDJ_CLI_BIN" load --deck 2 '/absolute/path/to/song.wav'
+"$VDJ_CLI_BIN" sync --deck 2 --to 1
+"$VDJ_CLI_BIN" play --deck 2
+"$VDJ_CLI_BIN" status
 ```
 
-Output is JSON. Exit 0 means the command's stated result succeeded; 1 means an operational failure; 2 means invalid arguments. `--help` describes current arguments.
+Execute each command only after checking the preceding result. For slow-opening files, `--timeout 5` goes **before** the subcommand; load verification polls metadata readiness without repeating the load.
 
-- Loading alone does not authorize starting playback. Typed load protects playing decks and verifies the loaded path. Use `--replace-playing` only when the user intends to replace that playing track.
-- Playlist selection/queuing is performed inside VirtualDJ in this milestone. Automix start requires a nonempty queue; next requires active Automix. Stop Automix before requesting a custom transition duration.
-- `sync --deck TARGET --to SOURCE` matches playback BPM only, using explicit distinct decks 1/2. Both decks need positive analyzed BPM, Automix stopped and target Pitch Lock off. Success verifies the target within 0.05 BPM of the captured source and checks the source still agrees. It does not request a playhead jump or beat/phrase alignment. Never repeat a failed sync automatically.
-- Transition returns `submitted`, not a completed or musically verified transition. Inspect deck state afterwards. Beat matching is conditional on VirtualDJ's engine and track tempos; it does not guarantee phrase alignment.
-- Status consists of sequential queries, not an atomic snapshot. Use it to choose the appropriate deck and avoid overwriting the live track.
-- SDK rejection, transport timeout or verification timeout is a real failure/unknown outcome. Inspect state before retrying a mutation; never automatically repeat a load, skip or transition.
-- Prefer typed commands. Advanced `vdj script 'VDJScript'` submits raw scripts without typed guards. Use it only for an understood action within the user's requested scope, and verify its effect with queries. See the [official verb reference](https://virtualdj.com/manuals/virtualdj/appendix/vdjscriptverbs.html).
+## BPM sync
 
+`sync --deck 2 --to 1` changes **deck 2** to follow **deck 1**. Reverse the numbers to change deck 1. Both decks must be loaded with positive BPM, Automix stopped and target Pitch Lock off. If those settings conflict with the user's intent, report the conflict instead of silently disabling them.
 
-Direct SDK text queries for version failed on the tested app; doctor uses VDJScript text formatting. A rejected license query is reported separately as unknown; do not infer license entitlements from it. Empty decks report null metadata; missing analyzed/tag fields may also be null. Positive SendCommand results can be nonfatal, so submission is always separate from state verification.
+This matches playback tempo through an explicit BPM action; it does not edit the analyzed beatgrid, start playback or request beat/phrase alignment. Success confirms the target within **0.05 BPM** of the captured source and checks that the source still agrees. Source analysis or settings may change between queries.
 
-For paired stems from the same recording, preserve the shared starting position and prefer `--no-sync`; isolated stem BPM/key estimates may disagree. Check matching absolute file positions using `get_position` or `get_time "elapsed" "absolute"`; ordinary elapsed time rescales with pitch. This was tested with Orion Sun — Mirage drums/vocals, with active master meter signal and a completed eight-beat no-sync crossfade. For slow-opening files, `vdj --timeout 5 load ...` allows a longer verification deadline; the CLI polls metadata readiness without resubmitting load.
+For separate stems of the **same recording**, preserve their common starting position and original speed unless tempo changes are requested. Independent stem BPM estimates can disagree despite a shared timeline. Prefer `transition --beats 8 --no-sync` for those stems. Compare absolute file positions with `query 'deck 2 get_position'` or `query 'deck 2 get_time "elapsed" "absolute"'`; ordinary elapsed time rescales with pitch.
 
-BPM sync was live-verified on build 9644: deck 2 changed from 117.318 to 116.996 BPM following deck 1, while absolute file positions and playing flags stayed unchanged. Original pitch was restored after the stopped-deck test to preserve paired-stem timing.
+## Other commands
+
+| Action | Command arguments after the executable |
+| --- | --- |
+| Inspect one deck | `status --deck 1` |
+| Pause | `pause --deck 1` |
+| Transition using engine sync | `transition --beats 8` |
+| Transition preserving tempos | `transition --beats 8 --no-sync` |
+| Automix | `automix start`, `stop`, `next` or `status` |
+| Numeric query | `query 'deck 1 get_bpm'` |
+| Text query | `query 'deck 1 get_filepath' --type text` |
+| Advanced action | `script 'VDJScript'` |
+
+Transition requires both decks loaded and Automix stopped. Playlist selection/queuing remains inside VirtualDJ; Automix start needs a nonempty queue, and next needs active Automix. Raw scripts bypass typed guards: use them for understood actions within the requested scope and query their effects. Consult the [official verb reference](https://virtualdj.com/manuals/virtualdj/appendix/vdjscriptverbs.html) when an advanced action requires it.
+
+## Failures and reporting
+
+- **Bridge unavailable:** ask the user to open/reopen VirtualDJ and select the master-effect plugin. Resume once they report it ready; repeated unavailable calls do not establish a connection.
+- **Mutation timeout or SDK rejection:** inspect state before deciding what to do. Never automatically repeat a load, sync, skip or transition; its outcome may be unknown.
+- **Sandbox blocks native IPC:** use the normal execution-permission flow and report the actual error.
+- **Missing metadata/license:** empty decks and absent tags can return null fields; an unavailable license query means unknown entitlement. A positive SDK execution result can still be a no-op, so rely on queried verification.
+- **Playback report:** distinguish loaded file, playing state, signal level and the user's listening confirmation. A master meter may come from the other deck.
+
+Finish with the chosen file/deck, any BPM change and the verified or submitted outcome. Accept local filesystem paths for track loading.

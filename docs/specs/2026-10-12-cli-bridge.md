@@ -61,3 +61,7 @@ Require both decks loaded, positive finite BPM on both decks, Automix stopped, a
 Acceptance: native harness covers both directions, source/transport preservation, invalid/unloaded decks, invalid BPM, Automix/Pitch Lock rejection and nonfatal no-op acknowledgement with a single submission. Verify against the running app, capture the result, update agent usage instructions and push the milestone. Paired stems of one recording retain a common timeline at their original speed; their independent BPM estimates need not agree.
 
 BPM sync acceptance evidence: twelve harness tests pass; live target BPM matched within 0.002 BPM on build 9644 with source tempo, absolute file positions and transport preserved. Original target pitch restored after testing. Ordinary elapsed time is tempo-scaled and cannot establish an unchanged file position.
+
+## Reusable agent skill — 2026-10-12
+
+After confirming the setup works, the user requested reusable skill instructions. Update the existing virtualdj-cli skill in the repo and installed skills directory, keeping their executable-location guidance appropriate to each location. Include connection/state checks, outcome verification, explicit target/source BPM sync, paired-stem timing, Automix prerequisites and recovery without mutation retries. Documentation-only acceptance: validate both skills and check examples against CLI help; do not trigger playback for skill packaging. Preserve automatic discovery.
