@@ -51,7 +51,12 @@ class Integration(unittest.TestCase):
         return response
 
     def test_doctor_and_utf8_state(self):
-        self.assertEqual(self.cli('doctor')['version'], 'TEST HOST')
+        doctor = self.cli('doctor')
+        self.assertEqual(doctor['version'], 'TEST HOST')
+        self.assertIsNone(doctor['license'])
+        self.assertEqual(doctor['license_query_error']['error'], 'sdk_rejected')
+        self.cli('pause', '--deck', '1')
+        self.cli('load', '--deck', '1', str(self.song))
         deck = self.cli('status', '--deck', '1')['decks'][0]
         self.assertEqual(deck['title'], 'Café "test"\ntrack')
         self.assertEqual(deck['elapsed_ms'], 1000)
@@ -85,6 +90,20 @@ class Integration(unittest.TestCase):
         dangerous.write_bytes(b'fixture')
         self.assertIn('unsupported_path_characters',
                       self.cli('load', '--deck', '1', str(dangerous), code=1)['error'])
+
+    def test_unloaded_deck_reports_null_fields(self):
+        self.cli('script', 'deck 1 unload')
+        deck = self.cli('status', '--deck', '1')['decks'][0]
+        self.assertFalse(deck['loaded'])
+        self.assertIsNone(deck['path'])
+        self.assertIsNone(deck['bpm'])
+        self.assertFalse(deck['playing'])
+
+    def test_nonfatal_ack_does_not_imply_verified_load(self):
+        ignored = self.song.parent / 'ignored.wav'
+        ignored.write_bytes(b'fixture')
+        response = self.cli('--timeout', '0.1', 'load', '--deck', '2', str(ignored), code=1)
+        self.assertIn('verification_timeout', response['error'])
 
     def test_unavailable_bridge(self):
         env = {**self.env, 'VDJ_BRIDGE_PORT': self.name + '.missing'}

@@ -47,3 +47,7 @@ M2: validate Free-edition runtime and agent workflow, then persist/install the s
 M3: explicit BPM sync and a reusable agent skill for local-file workflows.
 
 Loader revision: the AutoStart attempt did not expose the bridge on the user's Free installation. The SDK basic-plugin documentation/forum directs basic plugins to SoundEffect. AutoStart has historically required Pro. Testing the supported manual effects route next; this does not establish compatibility until live queries succeed.
+
+## Milestone evidence update
+
+Live selection on the user-reported Free build 9644 verified native communication, state queries, exact local loading, transport and a four-beat no-sync transition with silent audio. Eight regression tests pass. License introspection is unavailable and is reported as unknown. Musical quality, phrase alignment, live Automix start/next are still outside verified coverage; the user’s existing two-track Automix queue was preserved. Install the agent skill with those explicit limits.

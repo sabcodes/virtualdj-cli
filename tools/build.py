@@ -38,8 +38,8 @@ def main():
                     str(ROOT / 'plugin/bridge.cpp'), '-o', str(bundle / 'MacOS/AgentCLIBridge')], check=True)
     with (bundle / 'Info.plist').open('wb') as output:
         plistlib.dump({'CFBundleExecutable': 'AgentCLIBridge', 'CFBundleIdentifier': 'com.sabcodes.vdj-cli.bridge',
-                      'CFBundlePackageType': 'BNDL', 'CFBundleVersion': '1',
-                      'CFBundleShortVersionString': '0.1.0'}, output)
+                      'CFBundlePackageType': 'BNDL', 'CFBundleVersion': '2',
+                      'CFBundleShortVersionString': '0.1.1'}, output)
     # Clear metadata only on our generated bundle before ad-hoc signing.
     subprocess.run(['xattr', '-cr', str(bundle.parent)], check=True)
     subprocess.run(['codesign', '--force', '--sign', '-', str(bundle.parent)], check=True)

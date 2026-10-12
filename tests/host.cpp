@@ -9,13 +9,15 @@ class Host : public IVdjCallbacks8 {
 public:
     HRESULT SendCommand(const char* raw) override {
         std::string script(raw);
-        if (script == "reject") return S_FALSE;
+        if (script == "reject") return static_cast<HRESULT>(0x80070057);
+        if (script.find("ignored.wav") != std::string::npos) return S_FALSE;
         if (script == "automix on") automix_ = true;
         if (script == "automix off") automix_ = false;
         for (int i = 0; i < 2; ++i) {
             std::string prefix = "deck " + std::to_string(i + 1) + " ";
             if (script == prefix + "play") playing_[i] = true;
             if (script == prefix + "pause") playing_[i] = false;
+            if (script == prefix + "unload") { playing_[i] = false; paths_[i].clear(); }
             if (script.find(prefix + "play ? nothing : ") == 0 && playing_[i]) continue;
             auto start = script.find(prefix + "load \"");
             if (start != std::string::npos) {
@@ -23,7 +25,7 @@ public:
                 paths_[i] = script.substr(start, script.rfind('"') - start);
             }
         }
-        return S_OK;
+        return S_FALSE; // Matches nonfatal positive results observed in the real app.
     }
     HRESULT GetInfo(const char* raw, double* value) override {
         std::string script(raw);
@@ -35,6 +37,8 @@ public:
         else if (script == "crossfader") *value = .5;
         else if (script.find("get_bpm") != std::string::npos) *value = 120;
         else if (script.find("get_time") != std::string::npos) *value = 1000;
+        else if (script == "deck 1 loaded") *value = !paths_[0].empty();
+        else if (script == "deck 2 loaded") *value = !paths_[1].empty();
         else if (script == "deck 1 play") *value = playing_[0];
         else if (script == "deck 2 play") *value = playing_[1];
         else return S_FALSE;
@@ -42,8 +46,8 @@ public:
     }
     HRESULT GetStringInfo(const char* raw, void* output, int size) override {
         std::string script(raw), value;
-        if (script == "get_version") value = "TEST HOST";
-        else if (script == "get_license") value = "SIMULATED; NOT REAL FREE VALIDATION";
+        if (script == "get_text `get_version`") value = "TEST HOST";
+        else if (script == "get_license") return S_FALSE;
         else if (script == "deck 1 get_filepath") value = paths_[0];
         else if (script == "deck 2 get_filepath") value = paths_[1];
         else if (script.find("get_title") != std::string::npos) value = "Café \"test\"\ntrack";

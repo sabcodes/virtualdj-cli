@@ -57,7 +57,7 @@ public:
         info->PluginName = "Agent CLI Bridge";
         info->Author = "sabcodes";
         info->Description = "Local VDJScript command and query bridge (feasibility prototype)";
-        info->Version = "0.1.0";
+        info->Version = "0.1.1";
         info->Flags = 0;
         info->Bitmap = nullptr;
         return S_OK;
@@ -139,7 +139,7 @@ private:
             }
             default: return error("unknown_operation");
         }
-        if (result != S_OK)
+        if (result < 0 || (operation != 1 && result != S_OK))
             return "{\"ok\":false,\"error\":\"sdk_rejected\",\"hresult\":" + std::to_string(result) + "}";
         return "{\"ok\":true,\"value\":" + value + "}";
     }

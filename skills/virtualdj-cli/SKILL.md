@@ -5,7 +5,7 @@ description: Operate a running VirtualDJ instance through the local macOS CLI br
 
 # VirtualDJ CLI
 
-Availability: feasibility prototype. Native IPC is tested against simulated SDK callbacks; real Free-edition compatibility must be established. Run `doctor` against the real app before performing mutations. A successful test-harness response is not evidence about VirtualDJ.
+Availability: local-file feasibility milestone verified against the user’s running VirtualDJ 2026 build 9644 (user reports Free): status, protected loading, transport and a four-beat no-sync transition using silent WAVs. Automix status/stop are live-verified; start/next have harness coverage only. Run `doctor` against the real app before mutations. Neither silent-file testing nor a successful callback establishes musical quality.
 
 ## Locate and connect
 
@@ -42,3 +42,5 @@ Output is JSON. Exit 0 means the command's stated result succeeded; 1 means an o
 - SDK rejection, transport timeout or verification timeout is a real failure/unknown outcome. Inspect state before retrying a mutation; never automatically repeat a load, skip or transition.
 - Prefer typed commands. Advanced `vdj script 'VDJScript'` submits raw scripts without typed guards. Use it only for an understood action within the user's requested scope, and verify its effect with queries. See the [official verb reference](https://virtualdj.com/manuals/virtualdj/appendix/vdjscriptverbs.html).
 
+
+Direct SDK text queries for version failed on the tested app; doctor uses VDJScript text formatting. A rejected license query is reported separately as unknown; do not infer license entitlements from it. Empty decks report null metadata; missing analyzed/tag fields may also be null. Positive SendCommand results can be nonfatal, so submission is always separate from state verification.

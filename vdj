@@ -11,7 +11,9 @@ import time
 
 
 class VDJError(Exception):
-    pass
+    def __init__(self, message, details=None):
+        super().__init__(message)
+        self.details = details or {}
 
 
 class JSONParser(argparse.ArgumentParser):
@@ -79,7 +81,7 @@ class Bridge:
                 raise VDJError('bridge_invalid_response_size')
             response = json.loads(c.string_at(self.cf.CFDataGetBytePtr(reply), size))
             if not isinstance(response, dict) or response.get('ok') is not True:
-                raise VDJError(f'bridge_rejected: {response}')
+                raise VDJError(f'bridge_rejected: {response}', response if isinstance(response, dict) else None)
             return response['value']
         finally:
             if reply.value:
@@ -99,8 +101,14 @@ class Bridge:
         return value
 
     def execute(self, script):
-        if self.request(1, script) is not True:
-            raise VDJError('bridge_invalid_acknowledgment')
+        try:
+            if self.request(1, script) is not True:
+                raise VDJError('bridge_invalid_acknowledgment')
+        except VDJError as exc:
+            # The already-loaded 0.1.0 plugin reports S_FALSE as an error.
+            # SendCommand's positive HRESULT is nonfatal; verify effects separately.
+            if exc.details.get('error') != 'sdk_rejected' or exc.details.get('hresult') != 1:
+                raise
         return {'submitted': True, 'script': script}
 
 
@@ -139,10 +147,20 @@ def parser():
 
 def deck_status(bridge, deck):
     prefix = f'deck {deck} '
-    data = {'deck': deck}
+    loaded = bool(bridge.number(prefix + 'loaded'))
+    data = {'deck': deck, 'loaded': loaded}
+    if not loaded:
+        return {**data, 'path': None, 'title': None, 'artist': None, 'key': None,
+                'bpm': None, 'elapsed_ms': None, 'remaining_ms': None,
+                'playing': bool(bridge.number(prefix + 'play'))}
     for field, script in {'path': 'get_filepath', 'title': 'get_title', 'artist': 'get_artist',
                           'key': 'get_key'}.items():
-        data[field] = bridge.text(prefix + script)
+        try:
+            data[field] = bridge.text(prefix + script)
+        except VDJError as exc:
+            if field == 'path' or exc.details.get('error') != 'sdk_rejected' or exc.details.get('hresult') != 1:
+                raise
+            data[field] = None  # Known metadata may be absent or not yet analyzed.
     for field, script in {'bpm': 'get_bpm', 'elapsed_ms': 'get_time "elapsed"',
                           'remaining_ms': 'get_time "remain"'}.items():
         data[field] = bridge.number(prefix + script)
@@ -163,9 +181,17 @@ def verify(bridge, predicate, description):
 def run(args, bridge):
     command = args.command
     if command == 'doctor':
-        return {'bridge': 'connected', 'version': bridge.text('get_version'),
-                'build': bridge.number('get_build'), 'license': bridge.text('get_license'),
-                'free_compatibility': 'not established by a connection alone'}
+        result = {'bridge': 'connected', 'version': bridge.text('get_text `get_version`'),
+                  'build': bridge.number('get_build'),
+                  'free_compatibility': 'not established by a connection alone'}
+        try:
+            result['license'] = bridge.text('get_license')
+        except VDJError as exc:
+            if exc.details.get('error') != 'sdk_rejected':
+                raise
+            result['license'] = None
+            result['license_query_error'] = exc.details
+        return result
     if command == 'status':
         return {'decks': [deck_status(bridge, deck) for deck in ([args.deck] if args.deck else [1, 2])],
                 'automix': bool(bridge.number('automix')), 'crossfader': bridge.number('crossfader'),
@@ -184,7 +210,7 @@ def run(args, bridge):
             # Repeat the guard inside VirtualDJ to cover the gap since the query.
             script = prefix + f'play ? nothing : {script}'
         bridge.execute(script)
-        verify(bridge, lambda: bridge.text(prefix + 'get_filepath') == str(path), 'loaded path did not match')
+        verify(bridge, lambda: bool(bridge.number(prefix + 'loaded')) and bridge.text(prefix + 'get_filepath') == str(path), 'loaded path did not match')
         return {'verified': True, 'deck': args.deck, 'path': str(path)}
     if command in ('play', 'pause'):
         bridge.execute(f'deck {args.deck} {command}')
@@ -195,7 +221,7 @@ def run(args, bridge):
     if command == 'transition':
         if bridge.number('automix'):
             raise VDJError('automix_active: stop Automix to use a custom transition duration')
-        if not all(bridge.text(f'deck {deck} get_filepath') for deck in (1, 2)):
+        if not all(bridge.number(f'deck {deck} loaded') for deck in (1, 2)):
             raise VDJError('both_decks_must_have_tracks')
         verb = 'mix_now_nosync' if args.no_sync else 'mix_now'
         script = f'automix ? nothing : {verb} {args.beats:g}bt'

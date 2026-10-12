@@ -19,3 +19,14 @@ The agent skill exists as a repo-local draft. The bundled quick validator could 
 ## Next check
 
 User selects Agent CLI Bridge beside the vertical MASTER label in Performance layout. Query the app through `./vdj doctor` and `./vdj status`; inspect our startup-only log if unavailable. A directory move or repeated unavailable query must not be treated as success.
+
+## Live validation completed after manual plugin selection
+
+- The plugin is visible in the master effects list as AgentCLIBridge. Manual selection exposes the native message port; no desktop automation was used.
+- Actual build is now 9644, version 2026. User states Free; the SDK `get_license` text query returns S_FALSE, so automated entitlement identification remains unavailable.
+- `get_version` must be formatted through `get_text` for this SDK callback. Empty decks must be queried with `loaded` before metadata; absent fields are not evidence of a failed connection.
+- Real SendCommand can return positive S_FALSE even when it applies a command. Updated handling treats that as nonfatal submission while typed commands independently verify their effects. Negative SDK errors still fail. Regression coverage ensures a no-effect submission cannot be reported as a verified load.
+- Both generated 30-second silent WAVs loaded successfully and returned exact paths, BPM, elapsed/remaining times, title and artist. Play/pause states were verified.
+- A four-beat no-sync transition started deck 2 and moved the crossfader through approximately 0.04, 0.20, 0.36, 0.53, 0.70, 0.86 to 1.0. This verifies command execution/crossfade progression, not audio quality or phrase matching.
+- Test tracks were unloaded, playback stopped and original crossfader 0.5 restored. The existing Automix queue had two tracks and was kept intact; only Automix status/stop were tested live. Start/next remain harness-tested.
+- Eight native integration tests pass. Corrected 0.1.1 bundle compiles and is installed with an identified backup; the current live session used the original 0.1.0 plugin with compatible CLI handling. The new bundle loads on the next manual app restart.

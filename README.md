@@ -2,7 +2,7 @@
 
 A macOS CLI for agents to operate the running VirtualDJ app through its plugin SDK, VDJScript and Automix. No desktop input automation. This tool works with local music files.
 
-**Feasibility prototype:** native messaging and commands pass integration tests against simulated SDK callbacks. Real VirtualDJ Free support is still being checked. 
+**Local-file milestone verified:** on the user’s VirtualDJ 2026 build 9644 (user reports Free), the CLI reads deck state, loads local files, controls playback and completes a four-beat no-sync crossfade. Live tests used generated silent WAVs, so musical quality is unverified. Automix status/stop are live-tested; start/next retain harness coverage only.  The SDK license query is unavailable on the tested build and is reported as unknown.
 
 ## Setup
 
@@ -12,7 +12,7 @@ Requires Python 3 and Apple's existing command-line compiler tools. No Python pa
 python3 tools/install.py
 ```
 
-This downloads checksum-pinned SDK headers to ignored `.sdk/`, builds/signs our bundle in `~/Library/Caches/virtualdj-cli/build/`, and installs only a new bundle in the user's `SoundEffect` directory. Existing plugins are not overwritten. SDK headers are not redistributed in Git.
+This downloads checksum-pinned SDK headers to ignored `.sdk/`, builds/signs our bundle in `~/Library/Caches/virtualdj-cli/build/`, and installs only a new bundle in the user's `SoundEffect` directory. Existing plugins are not overwritten by default. `python3 tools/install.py --update-owned` backs up and updates only a bundle identified as this bridge, with rollback if copy/signature verification fails. A running app retains its already-loaded plugin until the next manual restart; the CLI also handles the original 0.1.0 bridge’s positive execution results. SDK headers are not redistributed in Git.
 
 Open/reopen VirtualDJ yourself. In the **master effects dropdown**, select **Agent CLI Bridge**. The Extensions settings page lists website plugins, so it is not the place to find this local plugin. Startup never plays music.
 
