@@ -27,7 +27,7 @@ Local message port is named per user in the macOS bootstrap session, not exposed
 
 1. Native arm64 bundle compiles against checksum-pinned official SDK headers; SDK remains ignored and is fetched locally, not redistributed.
 2. The real message-port/CLI pipeline runs against fake SDK callbacks: transport, UTF-8 output, argument rejection, guarded load, mutation verification, failed SDK calls, deadline rejection and unavailable bridge.
-3. Install only our new bundle in the discovered user AutoStart directory. Do not modify app binaries, licenses, existing plugins or settings. User opens/reopens VirtualDJ manually to load it.
+3. Install only our new bundle in the documented user SoundEffect directory; manually select the basic plugin once per app session. Do not modify app binaries, licenses, existing plugins or settings. User opens/reopens VirtualDJ manually to load it.
 4. Live gate: doctor identifies the real app and Free license; status queries work; local load confirms path; Automix and transition behavior is exercised with user-approved test audio. Until then, label the project as a feasibility prototype, not verified Free support.
 5. Agent usage instructions explain JSON and outcome verification; no skills are installed globally until this live gate passes.
 
@@ -45,3 +45,5 @@ Local message port is named per user in the macOS bootstrap session, not exposed
 M1: spec, build, CLI, native IPC harness, new plugin installed, commit/push; live gate explicitly recorded.
 M2: validate Free-edition runtime and agent workflow, then persist/install the skill.
 M3: explicit BPM sync and a reusable agent skill for local-file workflows.
+
+Loader revision: the AutoStart attempt did not expose the bridge on the user's Free installation. The SDK basic-plugin documentation/forum directs basic plugins to SoundEffect. AutoStart has historically required Pro. Testing the supported manual effects route next; this does not establish compatibility until live queries succeed.

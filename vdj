@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""Agent-facing VirtualDJ CLI. Uses native local IPC; never sends GUI input."""
+import argparse
+import ctypes as c
+import json
+import math
+import os
+from pathlib import Path
+import sys
+import time
+
+
+class VDJError(Exception):
+    pass
+
+
+class JSONParser(argparse.ArgumentParser):
+    def error(self, message):
+        print(json.dumps({'ok': False, 'error': 'invalid_arguments: ' + message}))
+        raise SystemExit(2)
+
+
+class Bridge:
+    def __init__(self, timeout=2.0):
+        self.timeout = timeout
+        self.cf = c.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+        signatures = {
+            'CFStringCreateWithCString': (c.c_void_p, [c.c_void_p, c.c_char_p, c.c_uint32]),
+            'CFMessagePortCreateRemote': (c.c_void_p, [c.c_void_p, c.c_void_p]),
+            'CFDataCreate': (c.c_void_p, [c.c_void_p, c.c_void_p, c.c_long]),
+            'CFDataGetLength': (c.c_long, [c.c_void_p]),
+            'CFDataGetBytePtr': (c.c_void_p, [c.c_void_p]),
+            'CFMessagePortSendRequest': (c.c_int32, [c.c_void_p, c.c_int32, c.c_void_p,
+                                                   c.c_double, c.c_double, c.c_void_p,
+                                                   c.POINTER(c.c_void_p)]),
+            'CFRelease': (None, [c.c_void_p]),
+        }
+        for name, (result, args) in signatures.items():
+            function = getattr(self.cf, name)
+            function.restype, function.argtypes = result, args
+        name = os.environ.get('VDJ_BRIDGE_PORT', f'com.sabcodes.virtualdj-cli.{os.getuid()}')
+        string = self.cf.CFStringCreateWithCString(None, name.encode(), 0x08000100)
+        if not string:
+            raise VDJError('bridge_allocation_failed')
+        try:
+            self.port = self.cf.CFMessagePortCreateRemote(None, string)
+        finally:
+            self.cf.CFRelease(string)
+        if not self.port:
+            raise VDJError('bridge_unavailable: install the plugin, then open/reopen VirtualDJ manually')
+        self.mode = c.c_void_p.in_dll(self.cf, 'kCFRunLoopDefaultMode')
+
+    def close(self):
+        if self.port:
+            self.cf.CFRelease(self.port)
+            self.port = None
+
+    def request(self, operation, script):
+        if not script or any(ch in script for ch in '\r\n\t\0'):
+            raise VDJError('invalid_script: control characters are not supported')
+        payload = f'{time.time() + self.timeout}\n{script}'.encode('utf-8')
+        if len(payload) > 16384:
+            raise VDJError('request_too_large')
+        buffer = c.create_string_buffer(payload)
+        data = self.cf.CFDataCreate(None, buffer, len(payload))
+        if not data:
+            raise VDJError('bridge_allocation_failed')
+        reply = c.c_void_p()
+        try:
+            result = self.cf.CFMessagePortSendRequest(self.port, operation, data, self.timeout,
+                                                    self.timeout, self.mode, c.byref(reply))
+            if result != 0:
+                raise VDJError(f'bridge_transport_error ({result}): outcome may be unknown; '
+                               'query status before retrying a mutation')
+            if not reply.value:
+                raise VDJError('bridge_empty_response')
+            size = self.cf.CFDataGetLength(reply)
+            if not 0 < size <= 524288:
+                raise VDJError('bridge_invalid_response_size')
+            response = json.loads(c.string_at(self.cf.CFDataGetBytePtr(reply), size))
+            if not isinstance(response, dict) or response.get('ok') is not True:
+                raise VDJError(f'bridge_rejected: {response}')
+            return response['value']
+        finally:
+            if reply.value:
+                self.cf.CFRelease(reply)
+            self.cf.CFRelease(data)
+
+    def number(self, script):
+        value = self.request(2, script)
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise VDJError('bridge_invalid_number')
+        return value
+
+    def text(self, script):
+        value = self.request(3, script)
+        if not isinstance(value, str):
+            raise VDJError('bridge_invalid_text')
+        return value
+
+    def execute(self, script):
+        if self.request(1, script) is not True:
+            raise VDJError('bridge_invalid_acknowledgment')
+        return {'submitted': True, 'script': script}
+
+
+def positive(value):
+    number = float(value)
+    if not math.isfinite(number) or number <= 0 or number > 128:
+        raise argparse.ArgumentTypeError('must be a finite number greater than 0 and at most 128')
+    return number
+
+
+def parser():
+    result = JSONParser(description=__doc__)
+    result.add_argument('--timeout', type=positive, default=2.0, help='IPC/verification timeout in seconds')
+    commands = result.add_subparsers(dest='command', required=True)
+    commands.add_parser('doctor')
+    status = commands.add_parser('status')
+    status.add_argument('--deck', type=int, choices=(1, 2))
+    for name in ('load', 'play', 'pause'):
+        command = commands.add_parser(name)
+        command.add_argument('--deck', type=int, choices=(1, 2), required=True)
+        if name == 'load':
+            command.add_argument('path')
+            command.add_argument('--replace-playing', action='store_true')
+    transition = commands.add_parser('transition')
+    transition.add_argument('--beats', type=positive, default=8.0)
+    transition.add_argument('--no-sync', action='store_true')
+    automix = commands.add_parser('automix')
+    automix.add_argument('action', choices=('start', 'stop', 'next', 'status'))
+    query = commands.add_parser('query')
+    query.add_argument('script')
+    query.add_argument('--type', choices=('number', 'text'), default='number')
+    script = commands.add_parser('script')
+    script.add_argument('script')
+    return result
+
+
+def deck_status(bridge, deck):
+    prefix = f'deck {deck} '
+    data = {'deck': deck}
+    for field, script in {'path': 'get_filepath', 'title': 'get_title', 'artist': 'get_artist',
+                          'key': 'get_key'}.items():
+        data[field] = bridge.text(prefix + script)
+    for field, script in {'bpm': 'get_bpm', 'elapsed_ms': 'get_time "elapsed"',
+                          'remaining_ms': 'get_time "remain"'}.items():
+        data[field] = bridge.number(prefix + script)
+    data['playing'] = bool(bridge.number(prefix + 'play'))
+    return data
+
+
+def verify(bridge, predicate, description):
+    deadline = time.monotonic() + bridge.timeout
+    while True:
+        if predicate():
+            return
+        if time.monotonic() >= deadline:
+            raise VDJError(f'verification_timeout: {description}; query status before retrying')
+        time.sleep(0.05)
+
+
+def run(args, bridge):
+    command = args.command
+    if command == 'doctor':
+        return {'bridge': 'connected', 'version': bridge.text('get_version'),
+                'build': bridge.number('get_build'), 'license': bridge.text('get_license'),
+                'free_compatibility': 'not established by a connection alone'}
+    if command == 'status':
+        return {'decks': [deck_status(bridge, deck) for deck in ([args.deck] if args.deck else [1, 2])],
+                'automix': bool(bridge.number('automix')), 'crossfader': bridge.number('crossfader'),
+                'snapshot': 'sequential_queries'}
+    if command == 'load':
+        path = Path(args.path).expanduser().resolve(strict=True)
+        if not path.is_file():
+            raise VDJError('not_a_file')
+        if any(char in str(path) for char in ('"', "'", '`', '\r', '\n', '\t', '\0')):
+            raise VDJError('unsupported_path_characters: VDJScript quoting would be ambiguous')
+        prefix = f'deck {args.deck} '
+        if not args.replace_playing and bridge.number(prefix + 'play'):
+            raise VDJError('deck_is_playing: choose the other deck or explicitly use --replace-playing')
+        script = prefix + f'load "{path}"'
+        if not args.replace_playing:
+            # Repeat the guard inside VirtualDJ to cover the gap since the query.
+            script = prefix + f'play ? nothing : {script}'
+        bridge.execute(script)
+        verify(bridge, lambda: bridge.text(prefix + 'get_filepath') == str(path), 'loaded path did not match')
+        return {'verified': True, 'deck': args.deck, 'path': str(path)}
+    if command in ('play', 'pause'):
+        bridge.execute(f'deck {args.deck} {command}')
+        expected = command == 'play'
+        verify(bridge, lambda: bool(bridge.number(f'deck {args.deck} play')) == expected,
+               'transport state did not match')
+        return {'verified': True, 'deck': args.deck, 'playing': expected}
+    if command == 'transition':
+        if bridge.number('automix'):
+            raise VDJError('automix_active: stop Automix to use a custom transition duration')
+        if not all(bridge.text(f'deck {deck} get_filepath') for deck in (1, 2)):
+            raise VDJError('both_decks_must_have_tracks')
+        verb = 'mix_now_nosync' if args.no_sync else 'mix_now'
+        script = f'automix ? nothing : {verb} {args.beats:g}bt'
+        return bridge.execute(script)
+    if command == 'automix':
+        if args.action == 'status':
+            return {'active': bool(bridge.number('automix'))}
+        if args.action == 'next':
+            if not bridge.number('automix'):
+                raise VDJError('automix_not_active')
+            return bridge.execute('automix_skip')
+        expected = args.action == 'start'
+        if expected and bridge.number('file_count automix') < 1:
+            raise VDJError('automix_playlist_empty: select/add tracks inside VirtualDJ first')
+        bridge.execute('automix on' if expected else 'automix off')
+        verify(bridge, lambda: bool(bridge.number('automix')) == expected, 'Automix state did not match')
+        return {'verified': True, 'active': expected}
+    if command == 'query':
+        method = bridge.text if args.type == 'text' else bridge.number
+        return {'value': method(args.script)}
+    return bridge.execute(args.script)
+
+
+def main():
+    bridge = None
+    try:
+        args = parser().parse_args()
+        bridge = Bridge(args.timeout)
+        result = run(args, bridge)
+        print(json.dumps({'ok': True, **result}, ensure_ascii=False, allow_nan=False))
+        return 0
+    except (VDJError, OSError, ValueError, KeyError) as exc:
+        print(json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False))
+        return 1
+    finally:
+        if bridge:
+            bridge.close()
+
+
+if __name__ == '__main__':
+    sys.exit(main())
