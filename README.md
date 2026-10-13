@@ -45,4 +45,4 @@ python3 -m unittest discover -s tests -v
 
 The harness starts only our bridge with fake SDK callbacks. It tests real native IPC, Unicode metadata, guarded loading, transport/Automix state verification, malformed inputs, SDK rejection, expired requests and unavailable connections. It does not prove playback, DSP quality or Free license compatibility.
 
-[Specification](docs/specs/2026-10-12-cli-bridge.md) · [Agent skill draft](skills/virtualdj-cli/SKILL.md) · [Initial discovery](docs/research/discovery.md)
+[Project context](CONTEXT.md) · [Specification](docs/specs/2026-10-12-cli-bridge.md) · [Agent skill draft](skills/virtualdj-cli/SKILL.md) · [Initial discovery](docs/research/discovery.md)

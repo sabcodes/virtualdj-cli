@@ -1,6 +1,6 @@
 # VirtualDJ CLI — milestone 1
 
-Status: implementation authorized by the user after discussing the CLI/plugin approach; local files first explicitly selected. Live VirtualDJ Free compatibility remains a release gate.
+Status: local-file milestone implemented and live-verified on the user-reported Free installation; reusable agent skill installed.
 
 ## Goal and accepted constraints
 
@@ -65,3 +65,7 @@ BPM sync acceptance evidence: twelve harness tests pass; live target BPM matched
 ## Reusable agent skill — 2026-10-12
 
 After confirming the setup works, the user requested reusable skill instructions. Update the existing virtualdj-cli skill in the repo and installed skills directory, keeping their executable-location guidance appropriate to each location. Include connection/state checks, outcome verification, explicit target/source BPM sync, paired-stem timing, Automix prerequisites and recovery without mutation retries. Documentation-only acceptance: validate both skills and check examples against CLI help; do not trigger playback for skill packaging. Preserve automatic discovery.
+
+## Project scope and publication - 2026-10-12
+
+Project name: VirtualDJ CLI. Repository: https://github.com/sabcodes/virtualdj-cli. Support local filesystem music only; account and streaming-service integrations are outside this tool. Public history uses the GitHub username/noreply identity and generic paths. Private recovery backups stay outside the public repository.
