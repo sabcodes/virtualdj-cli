@@ -31,4 +31,4 @@ Paired stems from one recording share a timeline at their original speed even wh
 
 ## Development
 
-Use the specification in `docs/specs/2026-10-12-cli-bridge.md` and evidence in `docs/research/cli-validation.md`. Use `main` as the default and integration branch. Use `codex/` names only for feature branches, then integrate completed work into `main`. Preserve important milestones in Git. Keep credentials, personal machine paths, native SDK headers, source audio and private backups out of Git.
+Use the specification in `docs/specs/2026-10-12-cli-bridge.md` and evidence in `docs/research/cli-validation.md`. Use `main` as the default and integration branch. Use `sabcodex/` names only for feature branches, then integrate completed work into `main`. Preserve important milestones in Git. Keep credentials, personal machine paths, native SDK headers, source audio and private backups out of Git.
